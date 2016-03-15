@@ -1,7 +1,6 @@
 # Portfolio
 This is my portfolio.
-None of the programs were written by me exclusively but were written by me
-and Fredrik Bergström.
+The programs were written by me and Fredrik Bergström.
 
 # Languages i know
 * Python
