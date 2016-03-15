@@ -1,0 +1,211 @@
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.PriorityQueue;
+import java.util.Scanner;
+
+public class FrequencyTable { 
+	 
+	 ArrayList<Byte> charVers = new ArrayList<Byte>();	
+	 
+	 HashMap<Byte, Integer> frequencyMap = new HashMap<Byte, Integer>();
+	 
+	 PriorityQueue<HuffmanTree> trees = new PriorityQueue<HuffmanTree>();
+	 
+	 
+	 private HuffmanTree root;
+	 
+	 private FrequencyTable() {
+	 }
+	 
+	 public FrequencyTable(byte[] data) {
+		for (byte b : data) {
+         	charVers.add(b); 
+		}
+		charVers.add((byte)0);
+        getFrequencies(); 
+        addsToPrioQueue();
+        createTree();
+	 }
+	
+	/**
+	 *  Counts the frequency of each character in charVers. 
+	 */
+    public void getFrequencies(){
+    	
+    	for(int i = 0; i < charVers.size(); ++i){
+    		byte c = charVers.get(i);
+    		Integer frequency = frequencyMap.get(new Byte(c));
+    		if(frequency != null){
+    			frequencyMap.put(c, new Integer(frequency + 1));
+    		}else{
+    			frequencyMap.put(c, 1);
+    		}
+    	}
+    }
+	
+   	/*
+   	 * 	Creates a HuffmanTree of each element of frequencyMap,
+   	 *  and adds that object to the PriorityQueue trees.	
+   	 */
+    
+	public void addsToPrioQueue(){
+		
+		for (byte c : frequencyMap.keySet())
+		{
+		   HuffmanTree node = new HuffmanTree();
+		   node.setCh(c);
+		   node.setFreq(frequencyMap.get(c));
+		   trees.add(node);
+		}	
+	}	
+	/*
+	 * 	Creates a complete HuffmanTree by using the PriorityQueue trees,
+	 * 	root is instantiated to the completed tree.
+	 */	
+		
+	public void createTree(){
+
+		while(trees.size() > 1){
+			
+			HuffmanTree lowest = trees.remove(); 
+			HuffmanTree secondLowest = trees.remove();
+			HuffmanTree node = new HuffmanTree();
+			node.setFreq(lowest.getFreq() + secondLowest.getFreq()); // Skapar förälder.
+			node.left = lowest;
+			node.right = secondLowest;
+			trees.add(node);
+			
+		}
+		root = trees.remove(); // root är trädet.
+
+	}
+	/*
+	 * Encodes the entire tree into huffman codes.
+	 */
+    public Map<Byte, Boolean[]> getEncode(){
+    	Map<Byte, Boolean[]> map = new HashMap<Byte, Boolean[]>();
+    	if (root != null){
+    		root.encodeMap(map, new ArrayList<Boolean>());
+    	}
+    	return map;
+    }
+    
+    public static FrequencyTable deserialize(Scanner scanner) {
+    	FrequencyTable ret = new FrequencyTable();
+    	while (scanner.hasNext()) {
+    		ret.frequencyMap.put((byte)scanner.nextInt(), scanner.nextInt());
+    	}
+        ret.getFrequencies(); 
+        ret.addsToPrioQueue();
+        ret.createTree();
+    	return ret;
+    }
+    
+    public void serialize(Writer writer) throws IOException {
+        for(Entry<Byte, Integer> c : frequencyMap.entrySet()){
+        	writer.write(c.getKey() + " " + c.getValue() + "\n");
+        }
+    }
+    
+    public static void compress(String filename, String compressedName, String freqTableName) {
+		// Create Frequency table from file.
+		File file = new File(filename);
+		
+		byte[] fileData = new byte[(int)file.length()];
+		try (FileInputStream fileToComprimate = new FileInputStream(file)) {
+			fileToComprimate.read(fileData);
+		} catch (FileNotFoundException fnfe) {
+			System.err.println(filename + " not found");
+			return;
+		} catch (IOException e) {
+			System.err.println("Unknown IOException while reading from " + filename);
+			e.printStackTrace();
+			return;
+		}
+		FrequencyTable table = new FrequencyTable(fileData);
+
+		// Serialize the table to a file.
+        
+        try (BufferedWriter freqTableWriter = new BufferedWriter(new FileWriter(freqTableName))) {
+        	table.serialize(freqTableWriter);
+			freqTableWriter.flush();
+        } catch (FileNotFoundException e) {
+        	System.err.println("Could not open " + freqTableName + " for writing");
+        	return;
+        } catch(IOException e) {
+			System.err.println("Unknown IOException while serializing frequency table to " + filename);
+			e.printStackTrace();
+			return;
+        }
+        
+        // Compress the file.
+        Map<Byte, Boolean[]> map = table.getEncode();
+        
+        try (BitFileWriter writer = new BitFileWriter(compressedName)) {
+			for (byte b : fileData) {
+				Boolean[] code = map.get(new Byte(b));
+				for (boolean bit : code) {
+					writer.write(bit);
+				}
+			}
+			for (boolean bit : map.get(new Byte((byte)0))) {
+					writer.write(bit);
+			}
+        } catch (FileNotFoundException e) {
+        	System.err.println("Could not open " + compressedName + " for writing");
+        	return;
+        } catch (IOException e) {
+			System.err.println("Unknown IOException while writing to " + compressedName);
+			e.printStackTrace();
+			return;
+        }
+    }
+    
+    public static void decompress(String compressedName, String freqName, String outputName) {
+        // Recreate the table from file.
+        Scanner freqTableScanner = null;
+        try {
+        	freqTableScanner = new Scanner(new File(freqName));
+        } catch(FileNotFoundException e) {
+        	System.err.println("Could not find file " + freqName);
+        }
+        FrequencyTable table = deserialize(freqTableScanner);
+        freqTableScanner.close();
+        
+        // Decompress the file to a different file.
+        try (BitFileReader bfr = new BitFileReader(compressedName);
+        		FileOutputStream decodedOut = new FileOutputStream(outputName)) {
+			while (bfr.available()) {
+				byte decompressed = table.root.decompressByte(bfr);
+				if (decompressed == (byte)0) {
+					break;
+				}
+				decodedOut.write(decompressed);
+			}
+        } catch (FileNotFoundException e) {
+        	System.err.println("Either the file " + compressedName + " or " + outputName +
+        			" could not be found/opened");
+        } catch (IOException e) {
+        	System.err.println("Unknown IOException happened while decompressing " + compressedName + 
+        			" to " + outputName);
+        }
+    }
+    
+	public static void main(String[] args) {
+		String fileName = "test";  // Filen du vill läsa
+		
+		compress(fileName, fileName + ".huff", fileName + ".freq");
+		decompress(fileName + ".huff", fileName + ".freq", fileName + ".out");
+	}
+}
