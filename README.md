@@ -1,5 +1,5 @@
 # Portfolio
-This is my portfolio.
+This is my portfolio, Holger Rosén.
 
 I have been programming on my own since I was 16, eg 5 years but since
 last year i have been studying Computer Science at Stockholms Universitet (but many of our courses are at KTH).
