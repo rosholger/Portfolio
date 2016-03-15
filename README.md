@@ -11,6 +11,8 @@ The programs were written by me and Fredrik Bergström.
 * Scheme
 * Common Lisp
 
+I am a fast learner when it comes to programming languages and frameworks.
+
 # Tech i know
 * git
 * fossil (another vcs)
